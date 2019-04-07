@@ -1,0 +1,6 @@
+sigpy_plot image
+
+First 500 layers are real, next 500 layers are imaginary data.
+Could use two channel, or just 1000 size channel.
+
+The T1 weighted, T2 weighted images are ground truth.
