@@ -18,7 +18,7 @@ import glob
 import time
 import matplotlib.pyplot as plt
 from utils.architectures.autoreg import SimpleReg, ComplexReg, ComplexRNN, SimplestReg
-from torch.nn.modules.loss import MSELoss
+from torch.nn.modules.loss import PoissonNLLLoss
 
 class AutoMRF(object):
     def __init__(self, batchsize=128, epochs=10, workers=4):
@@ -48,14 +48,14 @@ class AutoMRF(object):
         #     classifier.load_state_dict(torch.load(self.model))
 
 
-        regressor = SimplestReg()
+        regressor = SimpleReg()
         regressor.cuda()
 
-        optimizer = optim.Adagrad(regressor.parameters(), lr=0.01)
+        optimizer = optim.Adagrad(regressor.parameters(), lr=0.001)
         
         num_batch = len(dataset)//self.batchsize
         test_acc = []
-        loss_function = MSELoss()
+        loss_function = PoissonNLLLoss()
         for epoch in range(self.num_epoch):
             for i, data in enumerate(dataloader, 0):
                 MRF, T1, T2 = data[0].type(torch.FloatTensor), data[1].type(torch.FloatTensor),  data[2].type(torch.FloatTensor)

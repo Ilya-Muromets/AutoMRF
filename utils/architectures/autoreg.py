@@ -10,64 +10,39 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 
-# class SimpleReg(nn.Module):
-#     def __init__(self, input_size=500):
-#         super(SimpleReg, self).__init__()
-#         self.conv1 = torch.nn.Conv1d(input_size, 256, 1)
-#         self.conv2 = torch.nn.Conv1d(256, 128, 1)
-#         self.conv3 = torch.nn.Conv1d(128, 64, 1)
-#         self.conv4 = torch.nn.Conv1d(64, 2, 1)
-#         self.bn1 = nn.BatchNorm1d(256)
-#         self.bn2 = nn.BatchNorm1d(128)
-#         self.bn3 = nn.BatchNorm1d(64)
-
-#     def forward(self, x):
-#         batch_size = x.size()[0]
-#         input_size = x.size()[1]
-#         x = x.view(batch_size, input_size, -1)
-#         x = F.relu(self.bn1(self.conv1(x))) #self.conv1(x)
-#         x = F.relu(self.bn2(self.conv2(x))) #self.conv2(x)
-#         x = F.relu(self.bn3(self.conv3(x))) #self.conv3(x)
-#         x = self.conv4(x)
-#         x = F.log_softmax(x)
-#         return x
-
-
 class SimpleReg(nn.Module):
     def __init__(self, input_size=500):
         super(SimpleReg, self).__init__()
-        self.convT1_1 = torch.nn.Conv1d(1, 1, 32)
-        self.convT1_2 = torch.nn.Conv1d(1, 1, 32, 2)
-        self.convT1_3 = torch.nn.Conv1d(1, 1, 32, 4)
-        self.convT1_4 = torch.nn.Conv1d(1, 1, 32, 8)
-        self.convT1_5 = torch.nn.Conv1d(1, 1, 32, 16)
-        self.fccT1 = torch.nn.Linear(911,1)
+        self.avgpool = torch.nn.AvgPool1d(8)
+        self.convT1_1 = torch.nn.Conv1d(1, 4, 3)
+        self.convT1_2 = torch.nn.Conv1d(4, 16, 3)
+        self.convT1_3 = torch.nn.Conv1d(16, 32, 3)
+        self.convT1_4 = torch.nn.Conv1d(32, 8, 3)
+        self.convT1_5 = torch.nn.Conv1d(8, 1, 3)
 
-        self.convT2_1 = torch.nn.Conv1d(1, 1, 32)
-        self.convT2_2 = torch.nn.Conv1d(1, 1, 32, 2)
-        self.convT2_3 = torch.nn.Conv1d(1, 1, 32, 4)
-        self.convT2_4 = torch.nn.Conv1d(1, 1, 32, 8)
-        self.convT2_5 = torch.nn.Conv1d(1, 1, 32, 16)
-        self.fccT2 = torch.nn.Linear(911,1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(1024)
+        self.bn4 = nn.BatchNorm1d(512)
+        self.bn5 = nn.BatchNorm1d(256)
+
+        self.fccT1 = torch.nn.Linear(52,1)
 
     def forward(self, x):
         batch_size = x.size()[0]
         input_size = x.size()[1]
         x = x.view(batch_size, -1, input_size)
-        x_T1 = torch.cat((self.convT1_1(x), self.convT1_2(x), 
-                          self.convT1_3(x), self.convT1_4(x), 
-                          self.convT1_5(x)), 2)
-        x_T1 = torch.sigmoid(x_T1)
-
-        x_T2 = torch.cat((self.convT2_1(x), self.convT2_2(x), 
-                    self.convT2_3(x), self.convT2_4(x), 
-                    self.convT2_5(x)), 2)
-        x_T2 = torch.sigmoid(x_T2)
-
-        x_T1 = self.fccT1(x_T1)
-        x_T2 = self.fccT1(x_T2)
         
-        return torch.cat((x_T1,x_T2),1)
+        x = self.avgpool(x)
+        x_T1 = F.relu(self.convT1_1(x))
+        x_T1 = F.relu(self.convT1_2(x_T1))
+        x_T1 = F.relu(self.convT1_3(x_T1))
+        x_T1 = F.relu(self.convT1_4(x_T1))
+        x_T1 = F.relu(self.convT1_5(x_T1))
+
+        x_T1 = F.log_softmax(self.fccT1(x_T1), dim=0)
+        
+        return x_T1
 
 class SimplestReg(nn.Module):
     def __init__(self, input_size=500):
