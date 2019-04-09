@@ -106,6 +106,7 @@ class ClassMagLoader(Dataset):
         self.T1_data = []
         self.T2_data = []
         self.data_shape = None
+        self.eye = torch.from_numpy(np.eye(5))
         
         # load files
         for filename in natsort.natsorted(glob.glob(mag_path))[0:max_scans]:
@@ -144,5 +145,7 @@ class ClassMagLoader(Dataset):
         column_idx = matrix_idx%self.data_shape[1]
         T1 = self.T1_data[list_idx][0][row_idx,column_idx]
         T2 = self.T2_data[list_idx][0][row_idx,column_idx]
+        T1 = int(min(np.round(T1,0),4))
+        T2 = int(min(np.round(T2,0),4))
 
-        return self.mag_data[list_idx][:,row_idx,column_idx], np.round(T1,0), np.round(T2,0)
+        return self.mag_data[list_idx][:,row_idx,column_idx], T1, T2 #, self.eye[T1], self.eye[T2]

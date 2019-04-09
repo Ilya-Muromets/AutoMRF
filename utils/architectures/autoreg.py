@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 
 class SimpleReg(nn.Module):
-    def __init__(self, input_size=500):
+    def __init__(self, input_size=500, class_num=5):
         super(SimpleReg, self).__init__()
         self.avgpool = torch.nn.AvgPool1d(8)
         self.convT1_1 = torch.nn.Conv1d(1, 4, 3)
@@ -20,13 +20,13 @@ class SimpleReg(nn.Module):
         self.convT1_4 = torch.nn.Conv1d(32, 8, 3)
         self.convT1_5 = torch.nn.Conv1d(8, 1, 3)
 
-        self.bn1 = nn.BatchNorm1d(64)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.bn3 = nn.BatchNorm1d(1024)
-        self.bn4 = nn.BatchNorm1d(512)
-        self.bn5 = nn.BatchNorm1d(256)
+        # self.bn1 = nn.BatchNorm1d(64)
+        # self.bn2 = nn.BatchNorm1d(128)
+        # self.bn3 = nn.BatchNorm1d(1024)
+        # self.bn4 = nn.BatchNorm1d(512)
+        # self.bn5 = nn.BatchNorm1d(256)
 
-        self.fccT1 = torch.nn.Linear(52,1)
+        self.fccT1 = torch.nn.Linear(52,5)
 
     def forward(self, x):
         batch_size = x.size()[0]
@@ -40,7 +40,7 @@ class SimpleReg(nn.Module):
         x_T1 = F.relu(self.convT1_4(x_T1))
         x_T1 = F.relu(self.convT1_5(x_T1))
 
-        x_T1 = F.log_softmax(self.fccT1(x_T1), dim=0)
+        x_T1 = self.fccT1(x_T1)
         
         return x_T1
 
