@@ -101,13 +101,15 @@ class ComplexLoader(Dataset):
         return complex_datum, self.T1_data[list_idx][0][row_idx,column_idx], self.T2_data[list_idx][0][row_idx,column_idx]
 
 class ClassMagLoader(Dataset):
-    def __init__(self, mag_path='', T1_path='', T2_path='', max_scans=999999):
+    def __init__(self, mag_path='', T1_path='', T2_path='', max_scans=999999, num_classes=8):
         self.mag_data = []
         self.T1_data = []
         self.T2_data = []
         self.data_shape = None
-        self.eye = torch.from_numpy(np.eye(5))
-        
+        self.T1_class_counts = np.zeros(num_classes)
+        self.T2_class_counts = np.zeros(num_classes)
+
+
         # load files
         for filename in natsort.natsorted(glob.glob(mag_path))[0:max_scans]:
             self.mag_data.append(Variable(torch.from_numpy(np.load(filename))))
@@ -116,13 +118,27 @@ class ClassMagLoader(Dataset):
         print()
         
         for filename in natsort.natsorted(glob.glob(T1_path))[0:max_scans]:
-            self.T1_data.append(Variable(torch.from_numpy(np.load(filename))))
+            # round to int within class number
+            T1 = np.load(filename)
+            T1 = (T1-T1.min())
+            T1 = T1/T1.max()
+            T1 = np.round((num_classes-0.51)*T1, 0).astype(np.int)
+
+            # keep track of how many in each class
+            self.T1_class_counts += np.bincount(T1.flatten(), minlength=num_classes)
+            self.T1_data.append(Variable(torch.from_numpy(T1)))
         print("loaded: ", T1_path)
         print(len(self.T1_data), " files")
         print()
 
         for filename in natsort.natsorted(glob.glob(T2_path))[0:max_scans]:
-            self.T2_data.append(Variable(torch.from_numpy(np.load(filename))))
+            T2 = np.load(filename)
+            T2 = (T2-T2.min())
+            T2 = T2/T2.max()
+            T2 = np.round((num_classes-0.51)*T2, 0).astype(np.int)
+
+            self.T2_class_counts += np.bincount(T2.flatten(), minlength=num_classes)
+            self.T2_data.append(Variable(torch.from_numpy(T2)))
         print("loaded: ", T2_path)
         print(len(self.T2_data), " files")
         print()
@@ -132,7 +148,9 @@ class ClassMagLoader(Dataset):
         assert self.mag_data[0][0].shape == self.T1_data[0][0].shape == self.T2_data[0][0].shape, "shape mismatch"
         
         self.data_shape = self.mag_data[0][0].shape
+        print()
         print("slice shape: ", self.data_shape)
+        print()
 
     def __len__(self):
         return len(self.mag_data)*np.product(self.data_shape)
@@ -145,7 +163,4 @@ class ClassMagLoader(Dataset):
         column_idx = matrix_idx%self.data_shape[1]
         T1 = self.T1_data[list_idx][0][row_idx,column_idx]
         T2 = self.T2_data[list_idx][0][row_idx,column_idx]
-        T1 = int(min(np.round(T1,0),4))
-        T2 = int(min(np.round(T2,0),4))
-
-        return self.mag_data[list_idx][:,row_idx,column_idx], T1, T2 #, self.eye[T1], self.eye[T2]
+        return self.mag_data[list_idx][:,row_idx,column_idx], T1, T2
