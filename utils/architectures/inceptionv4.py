@@ -268,26 +268,29 @@ class InceptionV4(nn.Module):
         self.std = None
         # Modules
         self.features = nn.Sequential(
-            BasicConv1d(1, 32, kernel_size=3, stride=2),
+            BasicConv1d(2, 32, kernel_size=3, stride=2),
             BasicConv1d(32, 32, kernel_size=3, stride=1),
             BasicConv1d(32, 64, kernel_size=3, stride=1, padding=1),
+
             Mixed_3a(),
             Mixed_4a(),
             Mixed_5a(),
+
+            Inception_A(), # originally 4 layers
             Inception_A(),
             Inception_A(),
-            Inception_A(),
-            Inception_A(),
+
             Reduction_A(), # Mixed_6a
+
+            Inception_B(), # originally 7 layers
             Inception_B(),
             Inception_B(),
             Inception_B(),
             Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
+
             Reduction_B(), # Mixed_7a
-            Inception_C(),
+            
+            Inception_C(), # originally 3 layers
             Inception_C(),
             Inception_C()
         )
@@ -303,7 +306,7 @@ class InceptionV4(nn.Module):
 
     def forward(self, x):
         batch_size = x.size()[0]
-        input_size = x.size()[1]
+        input_size = x.size()[-1]
         x = x.view(batch_size, -1, input_size)
         x = self.features(x)
         x = self.logits(x)
@@ -311,5 +314,5 @@ class InceptionV4(nn.Module):
 
 if __name__ == "__main__":
     I4 = InceptionV4(num_classes=16)
-    test = torch.rand(16,500)
+    test = torch.rand(16,2,500)
     print(I4(test))

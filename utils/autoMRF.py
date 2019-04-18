@@ -23,11 +23,14 @@ from torch.nn.modules.loss import CrossEntropyLoss, MSELoss
 from time import gmtime, strftime
 
 class AutoClassMRF(object):
-    def __init__(self, batchsize=128, epochs=10, workers=4, num_classes=8):
+    def __init__(self, batchsize=128, epochs=10, workers=1, num_classes=8, alpha=0.9, model=None, model_name=None):
         self.batchsize=batchsize
         self.num_epoch=epochs
         self.workers=workers
         self.num_classes=num_classes
+        self.alpha = alpha
+        self.model = model
+        self.model_name = model_name
 
     def fit(self, dataset, test_dataset):
         curr_date = strftime("%d-%H:%M:%S", gmtime())
@@ -35,27 +38,23 @@ class AutoClassMRF(object):
 
         # initialise dataloader as single thread else socket errors
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batchsize,
-                                                shuffle=True)#, num_workers=int(self.workers))
+                                                shuffle=True, num_workers=int(self.workers))
 
         testdataloader = torch.utils.data.DataLoader(test_dataset, batch_size=self.batchsize,
-                                                shuffle=True)#, num_workers=int(self.workers))
+                                                shuffle=True, num_workers=int(self.workers))
 
         print("size of train: ", len(dataset))
         print("size of test: ", len(test_dataset))
 
-        # try:
-        #     os.makedirs(self.outf)
-        # except OSError:
-        #     pass
 
-        # if self.model != '':
-        #     classifier.load_state_dict(torch.load(self.model))
+        classifier = InceptionV4(self.num_classes)
+        classifier.cuda()
 
+        # possibly load model for fine-tuning
+        if self.model is not None:
+            classifier.load_state_dict(torch.load(self.model))
 
-        regressor = InceptionV4(self.num_classes)
-        regressor.cuda()
-
-        optimizer = optim.Adagrad(regressor.parameters(), lr=0.001)
+        optimizer = optim.Adagrad(classifier.parameters(), lr=0.001)
         
         num_batch = len(dataset)//self.batchsize
         test_acc = []
@@ -64,9 +63,9 @@ class AutoClassMRF(object):
         print("Class sample count: ", class_sample_count)
         weights = 1 / torch.from_numpy(class_sample_count).type(torch.FloatTensor)
 
+        # loss is combined cross-entropy and MSE loss
         criterion_CE = CrossEntropyLoss(weight=weights.cuda())
         criterion_MSE = MSELoss()
-        MSE_weight = 0
 
         for epoch in range(self.num_epoch):
             for i, data in enumerate(dataloader, 0):
@@ -75,35 +74,34 @@ class AutoClassMRF(object):
                 MRF, T1, T2 = MRF.cuda(), T1.cuda(), T2.cuda()
                 
                 optimizer.zero_grad()
-                regressor = regressor.train()
-                pred = regressor(MRF).view(self.batchsize,-1)
-                loss = criterion_CE(pred, T1)
-                # add square distance loss to class
-                loss += MSE_weight*criterion_MSE(pred.data.max(1)[1].type(torch.FloatTensor), T1.type(torch.FloatTensor))
+                classifier = classifier.train()
+                pred = classifier(MRF).view(self.batchsize,-1)
+                loss = criterion_CE(pred, T1)*self.alpha
+                # convert predictions to integer class predictions, add square distance to loss
+                loss += criterion_MSE(pred.data.max(1)[1].type(torch.FloatTensor),T1.type(torch.FloatTensor))*(1-self.alpha)
+                loss.backward()
+                optimizer.step()
                 
                 if i % (num_batch//40) == 0:
                     print('[%d: %d/%d] train loss: %f' %(epoch, i, num_batch, loss.item()))
-                loss.backward()
-                optimizer.step()
     
                 if i % (num_batch//5) == 0:
                     j, data = next(enumerate(testdataloader, 0))
                     MRF, T1, T2 = data[0].type(torch.FloatTensor), data[1].type(torch.LongTensor),  data[2].type(torch.LongTensor)
                     MRF, T1, T2 = Variable(MRF), Variable(T1), Variable(T2)
                     MRF, T1, T2 = MRF.cuda(), T1.cuda(), T2.cuda()
-
-                    loss = criterion_CE(pred, T1)
-                    # add square distance loss to class
-                    loss += MSE_weight*criterion_MSE(pred.data.max(1)[1].type(torch.FloatTensor), T1.type(torch.FloatTensor))
+                    loss = criterion_CE(pred, T1)*self.alpha
+                    loss += criterion_MSE(pred.data.max(1)[1].type(torch.FloatTensor),T1.type(torch.FloatTensor))*(1-self.alpha)
 
                     pred_choice = pred.data.max(1)[1]
                     correct = pred_choice.eq(T1.data).cpu().sum()
                     print(pred_choice[0:10])
                     print('[%d: %d/%d] %s loss: %f accuracy: %f' %(epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(self.batchsize)))
 
-
-            torch.save(regressor.state_dict(),"models/model" + curr_date)
-
+            if self.model_name is None:
+                torch.save(classifier.state_dict(),"models/model" + curr_date)
+            else:
+                torch.save(classifier.state_dict(),"models/" + self.model_name)
 
 
 class AutoRegMRF(object):
