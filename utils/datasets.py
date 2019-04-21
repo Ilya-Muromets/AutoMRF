@@ -184,6 +184,9 @@ class ClassComplexLoader(Dataset):
         for filename in natsort.natsorted(glob.glob(T1_path))[0:max_scans]:
             # round to int within class number
             T1 = np.load(filename)
+            # throw out outliers
+            thresh = np.percentile(T1,95)
+            T1[T1>thresh]=thresh
             T1 = (T1-T1.min())
             T1 = T1/T1.max()
             T1 = np.round((num_classes-0.51)*T1, 0).astype(np.int)
@@ -196,11 +199,16 @@ class ClassComplexLoader(Dataset):
         print()
 
         for filename in natsort.natsorted(glob.glob(T2_path))[0:max_scans]:
+            # round to int within class number
             T2 = np.load(filename)
+            # throw out outliers
+            thresh = np.percentile(T2,95)
+            T2[T2>thresh]=thresh
             T2 = (T2-T2.min())
             T2 = T2/T2.max()
             T2 = np.round((num_classes-0.51)*T2, 0).astype(np.int)
 
+            # keep track of how many in each class
             self.T2_class_counts += np.bincount(T2.flatten(), minlength=num_classes)
             self.T2_data.append(Variable(torch.from_numpy(T2)))
         print("loaded: ", T2_path)

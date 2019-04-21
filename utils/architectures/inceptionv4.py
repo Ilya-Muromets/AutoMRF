@@ -6,31 +6,6 @@ import torch.utils.model_zoo as model_zoo
 import os
 import sys
 
-__all__ = ['InceptionV4', 'inceptionv4']
-
-pretrained_settings = {
-    'inceptionv4': {
-        'imagenet': {
-            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionv4-8e4777a0.pth',
-            'input_space': 'RGB',
-            'input_size': [3, 299, 299],
-            'input_range': [0, 1],
-            'mean': [0.5, 0.5, 0.5],
-            'std': [0.5, 0.5, 0.5],
-            'num_classes': 1000
-        },
-        'imagenet+background': {
-            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionv4-8e4777a0.pth',
-            'input_space': 'RGB',
-            'input_size': [3, 299, 299],
-            'input_range': [0, 1],
-            'mean': [0.5, 0.5, 0.5],
-            'std': [0.5, 0.5, 0.5],
-            'num_classes': 1001
-        }
-    }
-}
-
 
 class BasicConv1d(nn.Module):
 
