@@ -1,51 +1,85 @@
 import numpy as np
 import glob
 import torch
+import time
 import natsort
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, Dataset
 
-class MagLoader(Dataset):
-    def __init__(self, mag_path='', T1_path='', T2_path='', max_scans=999999):
-        self.mag_data = []
-        self.T1_data = []
-        self.T2_data = []
+class ClassComplexLoader(Dataset):
+    def __init__(self, data_path='', T1_path='', T2_path='', num_classes=8, max_scans=335):
         self.data_shape = None
+        self.T1_class_counts = np.zeros(num_classes)
+        self.T2_class_counts = np.zeros(num_classes)
+        self.T1_filenames = None
+        self.T2_filenames = None
+        self.data_filenames = None
+        self.T1_class_counts = np.load("data/T1_class_counts.npy").reshape(-1,num_classes)
+        self.T1_class_counts = np.mean(self.T1_class_counts, axis=1)
+        self.T2_class_counts = np.load("data/T2_class_counts.npy").reshape(-1,num_classes)
+        self.T2_class_counts = np.mean(self.T2_class_counts, axis=1)
         
-        # load files
-        for filename in natsort.natsorted(glob.glob(mag_path))[0:max_scans]:
-            self.mag_data.append(Variable(torch.from_numpy(np.load(filename))))
-        print("loaded: ", mag_path)
-        print(len(self.mag_data), " files")
-        print()
-        
-        for filename in natsort.natsorted(glob.glob(T1_path))[0:max_scans]:
-            self.T1_data.append(Variable(torch.from_numpy(np.load(filename))))
-        print("loaded: ", T1_path)
-        print(len(self.T1_data), " files")
-        print()
+        self.num_classes = num_classes
 
-        for filename in natsort.natsorted(glob.glob(T2_path))[0:max_scans]:
-            self.T2_data.append(Variable(torch.from_numpy(np.load(filename))))
-        print("loaded: ", T2_path)
-        print(len(self.T2_data), " files")
-        print()
+
+        self.T1_filenames = natsort.natsorted(glob.glob(T1_path))[0:max_scans]
+        print("Found ", len(self.T1_filenames), " T1 files.")
+
+        self.T2_filenames = natsort.natsorted(glob.glob(T2_path))[0:max_scans]
+        print("Found ", len(self.T2_filenames), " T2 files.")
+
+        self.data_filenames = natsort.natsorted(glob.glob(data_path))[0:max_scans]
+        print("Found ", len(self.data_filenames), " MRF files.")
+
+        test = np.load(self.T1_filenames[0])[0]
+        self.data_shape = test.shape
+        print("Data shape: ", self.data_shape)
 
         # check we loaded correct number and shape
-        assert len(self.mag_data) == len(self.T1_data) == len(self.T2_data)
-        assert self.mag_data[0][0].shape == self.T1_data[0][0].shape == self.T2_data[0][0].shape, "shape mismatch"
-        
-        self.data_shape = self.mag_data[0][0].shape
-        print("slice shape: ", self.data_shape)
+        assert len(self.T1_filenames) == len(self.T2_filenames) >= len(self.data_filenames)
+
+        self.T1_filenames = np.array(self.T1_filenames)
+        self.T2_filenames = np.array(self.T2_filenames)
+        self.data_filenames = np.array(self.data_filenames)
 
     def __len__(self):
-        return len(self.mag_data)*np.product(self.data_shape)
+        return len(self.data_filenames)*np.product(self.data_shape)
 
     def __getitem__(self, idx):
-        #retrieve 
+        #retrieve indices
         list_idx = idx//np.product(self.data_shape)
         matrix_idx = idx%np.product(self.data_shape)
         row_idx = matrix_idx//self.data_shape[1]
         column_idx = matrix_idx%self.data_shape[1]
+    
 
-        return self.mag_data[list_idx][:,row_idx,column_idx], self.T1_data[list_idx][0][row_idx,column_idx], self.T2_data[list_idx][0][row_idx,column_idx]
+
+        # print(list_idx, column_idx, row_idx)
+
+
+
+        MRF = np.load(self.data_filenames[list_idx], mmap_mode="r")
+        complex_datum = np.array(MRF[column_idx, row_idx, :]) # index into matrix
+        # print(complex_datum.shape)
+        # print(time.time() - start)
+
+        # print(complex_datum.shape)
+        # stack real component on top of imaginary component of data, shape now (2,len/2)
+        complex_datum = complex_datum.reshape(2,500).astype(np.float32)
+        # print(time.time() - start)
+
+
+        T1_file = np.load(self.T1_filenames[list_idx], mmap_mode="r")
+        T1 = T1_file[0,row_idx,column_idx]
+        T1 = T1.astype(np.float64)/(2**16-1) # assuming uint16
+        T1 = np.round((self.num_classes-0.51)*T1, 0).astype(np.int)
+
+
+
+        T2_file = np.load(self.T2_filenames[list_idx], mmap_mode="r")
+        T2 = T2_file[0,row_idx,column_idx]
+        T2 = T2.astype(np.float64)/(2**16-1) # assuming uint16
+        T2 = np.round((self.num_classes-0.51)*T2, 0).astype(np.int)
+
+
+        return complex_datum, T1, T2
