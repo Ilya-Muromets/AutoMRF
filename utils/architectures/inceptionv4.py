@@ -261,7 +261,6 @@ class InceptionV4(nn.Module):
             Inception_B(),
             Inception_B(),
             Inception_B(),
-            Inception_B(),
 
             Reduction_B(), # Mixed_7a
             

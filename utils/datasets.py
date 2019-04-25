@@ -46,6 +46,7 @@ class ClassComplexLoader(Dataset):
         return len(self.data_filenames)*np.product(self.data_shape)
 
     def __getitem__(self, idx):
+        #start = time.time()
         #retrieve indices
         list_idx = idx//np.product(self.data_shape)
         matrix_idx = idx%np.product(self.data_shape)
@@ -66,7 +67,7 @@ class ClassComplexLoader(Dataset):
         # print(complex_datum.shape)
         # stack real component on top of imaginary component of data, shape now (2,len/2)
         complex_datum = complex_datum.reshape(2,500).astype(np.float32)
-        # print(time.time() - start)
+
 
 
         T1_file = np.load(self.T1_filenames[list_idx], mmap_mode="r")
@@ -81,5 +82,6 @@ class ClassComplexLoader(Dataset):
         T2 = T2.astype(np.float64)/(2**16-1) # assuming uint16
         T2 = np.round((self.num_classes-0.51)*T2, 0).astype(np.int)
 
-
+        #print(idx, " took ", time.time() - start)
         return complex_datum, T1, T2
+
