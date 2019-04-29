@@ -14,7 +14,7 @@ class SimpleClass(nn.Module):
     def __init__(self, num_classes=8):
         super(SimpleClass, self).__init__()
         self.avgpool = torch.nn.AvgPool1d(8)
-        self.conv1 = torch.nn.Conv1d(1, 16, 3)
+        self.conv1 = torch.nn.Conv1d(2, 16, 3)
         self.conv2 = torch.nn.Conv1d(16, 64, 3)
         self.conv3 = torch.nn.Conv1d(64, 512, 3)
         self.conv4 = torch.nn.Conv1d(512, 1024, 3)
@@ -35,7 +35,7 @@ class SimpleClass(nn.Module):
 
     def forward(self, x):
         batch_size = x.size()[0]
-        input_size = x.size()[1]
+        input_size = x.size()[-1]
         x = x.view(batch_size, -1, input_size)
         
         x = self.avgpool(x)

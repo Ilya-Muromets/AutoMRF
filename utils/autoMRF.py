@@ -19,6 +19,7 @@ import time
 import matplotlib.pyplot as plt
 from utils.architectures.autoreg import SimpleClass, SimpleReg
 from utils.architectures.inceptionv4 import InceptionV4
+# from utils.architectures.vde import VDE
 from torch.nn.modules.loss import CrossEntropyLoss, MSELoss, SmoothL1Loss
 from time import gmtime, strftime
 
@@ -84,7 +85,7 @@ class AutoClassMRF(object):
                 MRF, T1, T2 = MRF.to(device), T1.to(device), T2.to(device)
                 
                 # select nonzero T1 locs
-                nonzero_locs = torch.where(torch.norm(MRF, dim=(1,2)) > 1,
+                nonzero_locs = torch.where(torch.norm(MRF, dim=(1,2)) > 0.1,
                                              torch.tensor(1).to(device), 
                                              torch.tensor(0).to(device))
                 nonzero_locs = nonzero_locs.type(torch.ByteTensor)
@@ -101,8 +102,8 @@ class AutoClassMRF(object):
 
                 # convert class probabilities to choice for MSE
                 pred_MSE = Variable(pred.data.max(1)[1].type(torch.FloatTensor), requires_grad=True)
-                pred_MSE = pred_MSE.to(device)
-                T1_MSE = T1.type(torch.FloatTensor).to(device)
+                pred_MSE = pred_MSE.to(device)/self.num_classes # normalize
+                T1_MSE = T1.type(torch.FloatTensor).to(device)/self.num_classes
 
                 loss = criterion_CE(pred, T1)*self.alpha
                 # convert predictions to integer class predictions, add square distance to loss
@@ -113,27 +114,31 @@ class AutoClassMRF(object):
                 optimizer.step()
                 
                 if i % (self.steps_per_batch//40) == 0:
-                    print('[%d: %d/%d] train loss: %f' %(epoch, i, self.steps_per_batch, loss.item()))
+                    ce_loss = criterion_CE(pred, T1)*self.alpha
+                    mse_loss =  criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
+                    train_loss.append((epoch, i + epoch*self.steps_per_batch, (ce_loss, mse_loss)))
+
+                    print('[%d: %d/%d] MSE loss: %f CE loss: %f' %(epoch, i, self.steps_per_batch, mse_loss, ce_loss))
     
                 if i % (self.steps_per_batch//5) == 0:
-                    train_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
 
                     j, data = next(enumerate(testdataloader, 0))
                     MRF, T1, T2 = data[0].type(torch.FloatTensor), data[1].type(torch.LongTensor),  data[2].type(torch.LongTensor)
                     MRF, T1, T2 = Variable(MRF), Variable(T1), Variable(T2)
                     MRF, T1, T2 = MRF.to(device), T1.to(device), T2.to(device)
 
+                    classifier = classifier.eval()
                     pred = classifier(MRF).view(MRF.size()[0],-1)
 
                     # convert class probabilities to choice for MSE
                     pred_MSE = Variable(pred.data.max(1)[1].type(torch.FloatTensor), requires_grad=True)
-                    pred_MSE = pred_MSE.to(device)
-                    T1_MSE = T1.type(torch.FloatTensor).to(device)
+                    pred_MSE = pred_MSE.to(device)/self.num_classes # normalize
+                    T1_MSE = T1.type(torch.FloatTensor).to(device)/self.num_classes
 
                     loss = criterion_CE(pred, T1)*self.alpha
                     # convert predictions to integer class predictions, add square distance to loss
                     loss += criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
-                    val_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
+                    # val_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
 
                     pred_choice = pred.data.max(1)[1]
                     correct = pred_choice.eq(T1.data).cpu().sum()
@@ -146,8 +151,8 @@ class AutoClassMRF(object):
             else:
                 torch.save(classifier.state_dict(),"models/" + self.model_name)
 
-            np.save("outputs/train_loss" + curr_date, np.array(train_loss))
-            np.save("outputs/val_loss" + curr_date, np.array(val_loss))
+            np.save("outputs/loss" + curr_date, np.array(train_loss))
+            # np.save("outputs/val_loss" + curr_date, np.array(val_loss))
 
 class AutoRegMRF(object):
     def __init__(self, batchsize=128, epochs=10, workers=1, num_classes=8, alpha=0.9, model=None, model_name=None, steps_per_batch=1024):
@@ -184,7 +189,7 @@ class AutoRegMRF(object):
         if self.model is not None:
             regressor.load_state_dict(torch.load(self.model))
 
-        optimizer = optim.Adadelta(regressor.parameters())
+        optimizer = optim.Adadelta(regressor.parameters(), weight_decay=0)
         
         test_acc = []
 
@@ -192,7 +197,7 @@ class AutoRegMRF(object):
         train_loss = []
         val_loss = []
 
-        criterion_MSE = MSELoss()
+        criterion = MSELoss()
         start = time.time()
 
         for epoch in range(self.num_epoch):
@@ -200,14 +205,12 @@ class AutoRegMRF(object):
                 if i > self.steps_per_batch:
                     break
 
-                # print("yeet")
                 MRF, T1, T2 = data[0].type(torch.FloatTensor), data[1].type(torch.FloatTensor), data[2].type(torch.FloatTensor)
-                T1, T2 = T1/self.num_classes, T2/self.num_classes
                 MRF, T1, T2 = Variable(MRF), Variable(T1), Variable(T2)
                 MRF, T1, T2 = MRF.to(device), T1.to(device), T2.to(device)
                 
                 # select nonzero T1 locs
-                nonzero_locs = torch.where(torch.norm(MRF, dim=(1,2)) > 1,
+                nonzero_locs = torch.where(torch.norm(MRF, dim=(1,2)) > 0.1,
                                              torch.tensor(1).to(device), 
                                              torch.tensor(0).to(device))
                 nonzero_locs = nonzero_locs.type(torch.ByteTensor)
@@ -221,29 +224,28 @@ class AutoRegMRF(object):
                 optimizer.zero_grad()
                 regressor = regressor.train()
                 pred = regressor(MRF).view(MRF.size()[0])
-                loss = criterion_MSE(pred, T1)
+                loss = criterion(pred, T1)
                 loss.backward()
                 optimizer.step()
                 
-                if i % (self.steps_per_batch//40) == 0:
-                    print('[%d: %d/%d] train loss: %f' %(epoch, i, self.steps_per_batch, loss.item()))
+                if i % (self.steps_per_batch//100) == 0:
+                    train_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)])
+                    print('[%d: %d/%d] train loss: %f' %(epoch, i, self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)))
     
-                if i % (self.steps_per_batch//5) == 0:
-                    train_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
-
+                if i % (self.steps_per_batch//4) == 0:
                     j, data = next(enumerate(testdataloader, 0))
                     MRF, T1, T2 = data[0].type(torch.FloatTensor), data[1].type(torch.FloatTensor),  data[2].type(torch.FloatTensor)
-                    T1, T2 = T1/self.num_classes, T2/self.num_classes
                     MRF, T1, T2 = Variable(MRF), Variable(T1), Variable(T2)
                     MRF, T1, T2 = MRF.to(device), T1.to(device), T2.to(device)
 
+                    regressor = regressor.eval()
                     pred = regressor(MRF).view(MRF.size()[0])
-                    loss = criterion_MSE(pred, T1)
+                    loss = criterion(pred, T1)
                     loss.backward()
-                    val_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
+                    val_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)])
 
                     print(pred[0:10])
-                    print('[%d: %d/%d] %s loss: %f ' %(epoch, i, self.steps_per_batch, blue('test'), loss.item()))
+                    print('[%d: %d/%d] %s loss: %f ' %(epoch, i, self.steps_per_batch, blue('test'), np.float32(loss.item())/(self.num_classes**2)))
                     print("Time elapsed: ", (time.time() - start)/60, " minutes")
 
             if self.model_name is None:
@@ -253,3 +255,33 @@ class AutoRegMRF(object):
 
             np.save("outputs/train_loss" + curr_date, np.array(train_loss))
             np.save("outputs/val_loss" + curr_date, np.array(val_loss))    
+
+# class AutoVDE(object):
+#     def __init__(self, numbatches=256, batchsize=512, input_size=500, encoder_size=100, verbose=False, workers=8):
+#         self.real_encoder = VDE(input_size=input_size, encoder_size=encoder_size, verbose=verbose, cuda=True)
+#         self.imag_encoder = VDE(input_size=input_size, encoder_size=encoder_size, verbose=verbose, cuda=True)
+#         self.numbatches = numbatches
+#         self.batchsize = batchsize
+#         self.workers = workers
+
+#     def fit(self, dataset):
+#         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batchsize,
+#                                                 shuffle=True, num_workers=int(self.workers))
+
+#         for i, data in enumerate(dataloader, 0):
+#             if i > self.numbatches:
+#                 break
+#             if i % (self.numbatches//10) == 0:
+#                 print("Batch: ", i)
+#             MRF, T1, T2 = data
+#             batch_real = MRF[:,0,:].squeeze()
+#             batch_imag = MRF[:,1,:].squeeze()
+#             print(batch_real.size())
+#             print(batch_imag.size())
+
+
+#             self.real_encoder.fit(batch_real)
+#             self.imag_encoder.fit(batch_imag)
+
+            
+

@@ -7,16 +7,17 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader, Dataset
 
 class ClassComplexLoader(Dataset):
-    def __init__(self, data_path='', T1_path='', T2_path='', num_classes=8, max_scans=335):
+    def __init__(self, data_path='', T1_path='', T2_path='', num_classes=8, max_scans=335, signal_length=999999):
         self.data_shape = None
         self.T1_class_counts = np.zeros(num_classes)
         self.T2_class_counts = np.zeros(num_classes)
         self.T1_filenames = None
         self.T2_filenames = None
         self.data_filenames = None
-        self.T1_class_counts = np.load("data/T1_class_counts.npy").reshape(-1,num_classes)
+        self.signal_length = signal_length
+        self.T1_class_counts = np.load("data/T1_class_counts.npy").reshape(num_classes,-1)
         self.T1_class_counts = np.mean(self.T1_class_counts, axis=1)
-        self.T2_class_counts = np.load("data/T2_class_counts.npy").reshape(-1,num_classes)
+        self.T2_class_counts = np.load("data/T2_class_counts.npy").reshape(num_classes,-1)
         self.T2_class_counts = np.mean(self.T2_class_counts, axis=1)
         
         self.num_classes = num_classes
@@ -67,20 +68,18 @@ class ClassComplexLoader(Dataset):
         # print(complex_datum.shape)
         # stack real component on top of imaginary component of data, shape now (2,len/2)
         complex_datum = complex_datum.reshape(2,500).astype(np.float32)
-
+        complex_datum = complex_datum[:,0:self.signal_length]
 
 
         T1_file = np.load(self.T1_filenames[list_idx], mmap_mode="r")
         T1 = T1_file[0,row_idx,column_idx]
         T1 = T1.astype(np.float64)/(2**16-1) # assuming uint16
-        T1 = np.round((self.num_classes-0.51)*T1, 0).astype(np.int)
-
-
+        T1 = np.round((self.num_classes-1)*T1, 0).astype(np.int)
 
         T2_file = np.load(self.T2_filenames[list_idx], mmap_mode="r")
         T2 = T2_file[0,row_idx,column_idx]
         T2 = T2.astype(np.float64)/(2**16-1) # assuming uint16
-        T2 = np.round((self.num_classes-0.51)*T2, 0).astype(np.int)
+        T2 = np.round((self.num_classes-1)*T2, 0).astype(np.int)
 
         #print(idx, " took ", time.time() - start)
         return complex_datum, T1, T2

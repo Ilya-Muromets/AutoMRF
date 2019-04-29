@@ -262,12 +262,14 @@ class InceptionV4(nn.Module):
             Inception_B(),
             Inception_B(),
 
+
             Reduction_B(), # Mixed_7a
             
             Inception_C(), # originally 3 layers
             Inception_C(),
             Inception_C()
         )
+        self.dropout = nn.Dropout(0.2) # in original paper
         self.last_linear = nn.Linear(1536, num_classes)
 
     def logits(self, features):
