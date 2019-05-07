@@ -114,9 +114,9 @@ class AutoClassMRF(object):
                 optimizer.step()
                 
                 if i % (self.steps_per_batch//40) == 0:
-                    ce_loss = criterion_CE(pred, T1)*self.alpha
-                    mse_loss =  criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
-                    train_loss.append((epoch, i + epoch*self.steps_per_batch, (ce_loss, mse_loss)))
+                    ce_loss = np.float32(criterion_CE(pred, T1).item()*self.alpha)
+                    mse_loss =  np.float32(criterion_MSE(pred_MSE,T1_MSE).item()*(1-self.alpha))
+                    train_loss.append([epoch, i + epoch*self.steps_per_batch, ce_loss, mse_loss])
 
                     print('[%d: %d/%d] MSE loss: %f CE loss: %f' %(epoch, i, self.steps_per_batch, mse_loss, ce_loss))
     
@@ -148,18 +148,20 @@ class AutoClassMRF(object):
 
             if self.model_name is None:
                 torch.save(classifier.state_dict(),"models/model" + curr_date)
+                np.save("outputs/loss" + curr_date, np.array(train_loss))
+
             else:
                 torch.save(classifier.state_dict(),"models/" + self.model_name)
+                np.save("outputs/loss" + self.model_name, np.array(train_loss))
 
-            np.save("outputs/loss" + curr_date, np.array(train_loss))
+
             # np.save("outputs/val_loss" + curr_date, np.array(val_loss))
 
 class AutoRegMRF(object):
-    def __init__(self, batchsize=128, epochs=10, workers=1, num_classes=8, alpha=0.9, model=None, model_name=None, steps_per_batch=1024):
+    def __init__(self, batchsize=128, epochs=10, workers=1, alpha=0.9, model=None, model_name=None, steps_per_batch=1024):
         self.batchsize=batchsize
         self.num_epoch=epochs
         self.workers=workers
-        self.num_classes=num_classes
         self.alpha = alpha
         self.model = model
         self.model_name = model_name
@@ -189,7 +191,7 @@ class AutoRegMRF(object):
         if self.model is not None:
             regressor.load_state_dict(torch.load(self.model))
 
-        optimizer = optim.Adadelta(regressor.parameters(), weight_decay=0)
+        optimizer = optim.Adadelta(regressor.parameters(), weight_decay=0.01)
         
         test_acc = []
 
@@ -229,8 +231,8 @@ class AutoRegMRF(object):
                 optimizer.step()
                 
                 if i % (self.steps_per_batch//100) == 0:
-                    train_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)])
-                    print('[%d: %d/%d] train loss: %f' %(epoch, i, self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)))
+                    train_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(2**16)])
+                    print('[%d: %d/%d] train loss: %f' %(epoch, i, self.steps_per_batch, np.float32(loss.item())/(2**16)))
     
                 if i % (self.steps_per_batch//4) == 0:
                     j, data = next(enumerate(testdataloader, 0))
@@ -242,19 +244,20 @@ class AutoRegMRF(object):
                     pred = regressor(MRF).view(MRF.size()[0])
                     loss = criterion(pred, T1)
                     loss.backward()
-                    val_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(self.num_classes**2)])
+                    val_loss.append([epoch, i + epoch*self.steps_per_batch, np.float32(loss.item())/(2**16)])
 
                     print(pred[0:10])
-                    print('[%d: %d/%d] %s loss: %f ' %(epoch, i, self.steps_per_batch, blue('test'), np.float32(loss.item())/(self.num_classes**2)))
+                    print('[%d: %d/%d] %s loss: %f ' %(epoch, i, self.steps_per_batch, blue('test'), np.float32(loss.item())/(2**16)))
                     print("Time elapsed: ", (time.time() - start)/60, " minutes")
 
             if self.model_name is None:
                 torch.save(regressor.state_dict(),"models/model" + curr_date)
+                np.save("outputs/train_loss" + curr_date, np.array(train_loss))
+                np.save("outputs/val_loss" + curr_date, np.array(val_loss))    
             else:
                 torch.save(regressor.state_dict(),"models/" + self.model_name)
-
-            np.save("outputs/train_loss" + curr_date, np.array(train_loss))
-            np.save("outputs/val_loss" + curr_date, np.array(val_loss))    
+                np.save("outputs/train_loss"  + self.model_name, np.array(train_loss))
+                np.save("outputs/val_loss"  + self.model_name, np.array(val_loss))    
 
 # class AutoVDE(object):
 #     def __init__(self, numbatches=256, batchsize=512, input_size=500, encoder_size=100, verbose=False, workers=8):
