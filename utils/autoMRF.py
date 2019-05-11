@@ -34,11 +34,10 @@ class AutoClassMRF(object):
         self.model_name = model_name
         self.steps_per_batch = steps_per_batch
 
-
     def fit(self, dataset, test_dataset):
         device = torch.device("cuda:0")
         curr_date = strftime("%d-%H:%M:%S", gmtime())
-        blue = lambda x:'\033[94m' + x + '\033[0m'
+        blue = lambda x:'\033[94m' + x + '\033[0m' 
 
         # initialise dataloader as single thread else socket errors
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batchsize,
@@ -58,7 +57,7 @@ class AutoClassMRF(object):
         if self.model is not None:
             classifier.load_state_dict(torch.load(self.model))
 
-        optimizer = optim.Adadelta(classifier.parameters())
+        optimizer = optim.Adagrad(classifier.parameters(), lr=1e-3)
         
         test_acc = []
 
@@ -71,9 +70,19 @@ class AutoClassMRF(object):
         val_loss = []
 
         # loss is combined cross-entropy and MSE loss
-        criterion_CE = CrossEntropyLoss(weight=weights.to(device))
+        criterion_CE = CrossEntropyLoss()#weight=weights.to(device))
         criterion_MSE = MSELoss()
         start = time.time()
+
+        def update_loss():
+            if self.alpha >= 1:
+                loss = criterion_CE(pred, T1)
+            elif self.alpha <= 0:
+                loss = criterion_MSE(pred_MSE,T1_MSE)
+            else:
+                loss = criterion_CE(pred, T1)*self.alpha
+                loss += criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
+            return loss
 
         for epoch in range(self.num_epoch):
             for i, data in enumerate(dataloader, 0):
@@ -105,9 +114,7 @@ class AutoClassMRF(object):
                 pred_MSE = pred_MSE.to(device)/self.num_classes # normalize
                 T1_MSE = T1.type(torch.FloatTensor).to(device)/self.num_classes
 
-                loss = criterion_CE(pred, T1)*self.alpha
-                # convert predictions to integer class predictions, add square distance to loss
-                loss += criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
+                loss = update_loss()
                 # print(loss)
                 # print()
                 loss.backward()
@@ -130,15 +137,11 @@ class AutoClassMRF(object):
                     classifier = classifier.eval()
                     pred = classifier(MRF).view(MRF.size()[0],-1)
 
-                    # convert class probabilities to choice for MSE
                     pred_MSE = Variable(pred.data.max(1)[1].type(torch.FloatTensor), requires_grad=True)
                     pred_MSE = pred_MSE.to(device)/self.num_classes # normalize
                     T1_MSE = T1.type(torch.FloatTensor).to(device)/self.num_classes
 
-                    loss = criterion_CE(pred, T1)*self.alpha
-                    # convert predictions to integer class predictions, add square distance to loss
-                    loss += criterion_MSE(pred_MSE,T1_MSE)*(1-self.alpha)
-                    # val_loss.append((epoch, i + epoch*self.steps_per_batch, loss.item()))
+                    loss = update_loss()
 
                     pred_choice = pred.data.max(1)[1]
                     correct = pred_choice.eq(T1.data).cpu().sum()
@@ -191,7 +194,7 @@ class AutoRegMRF(object):
         if self.model is not None:
             regressor.load_state_dict(torch.load(self.model))
 
-        optimizer = optim.Adadelta(regressor.parameters(), weight_decay=0.01)
+        optimizer = optim.Adagrad(regressor.parameters(), lr=1e-3, weight_decay=0.1)
         
         test_acc = []
 
@@ -199,7 +202,7 @@ class AutoRegMRF(object):
         train_loss = []
         val_loss = []
 
-        criterion = MSELoss()
+        criterion = SmoothL1Loss()
         start = time.time()
 
         for epoch in range(self.num_epoch):
