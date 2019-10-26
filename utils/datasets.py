@@ -53,13 +53,7 @@ class ClassComplexLoader(Dataset):
         matrix_idx = idx%np.product(self.data_shape)
         row_idx = matrix_idx//self.data_shape[1]
         column_idx = matrix_idx%self.data_shape[1]
-    
-
-
-        # print(list_idx, column_idx, row_idx)
-
-
-
+ 
         MRF = np.load(self.data_filenames[list_idx], mmap_mode="r")
         complex_datum = np.array(MRF[column_idx, row_idx, :]) # index into matrix
         # print(complex_datum.shape)
