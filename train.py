@@ -24,14 +24,20 @@ if args.model == 'reg':
     AMRF = AutoRegMRF(batchsize=args.batchsize, epochs=args.epochs, workers=args.workers, model_name=args.model_name, device=args.device)
     AMRF.fit(train, test)
 
-# train = ClassComplexLoader("data/MRF/*","data/T1w/*","data/T2w/*", num_classes=2**16)
-# test = ClassComplexLoader("data/MRF_test/*","data/T1w_test/*","data/T2w_test/*", num_classes=2**16)
+elif args.model == 'class':
+    train = ClassComplexLoader("data/MRF/*","data/T1w/*","data/T2w/*", num_classes=args.num_classes)
+    test = ClassComplexLoader("data/MRF_test/*","data/T1w_test/*","data/T2w_test/*", num_classes=args.num_classes)
 
-# AMRF = AutoDivMRF(batchsize=512, epochs=100, workers=8, model_name="regepoch100T1", device=3)
-# AMRF.fit(train, test)
+    AMRF = AutoClassMRF(batchsize=args.batchsize, epochs=args.epochs, workers=args.workers, model_name=args.model_name, device=args.device)
+    AMRF.fit(train, test)
 
-# train = ClassComplexLoader("data/MRF/*","data/T1w/*","data/T1w/*", num_classes=2**16)
-# test = ClassComplexLoader("data/MRF_test/*","data/T1w_test/*","data/T1w_test/*", num_classes=2**16)
 
-# AMRF = AutoRegMRF(batchsize=512, epochs=200, workers=8, model_name="regL1T1")
-# AMRF.fit(train, test)
+elif args.model == 'div':
+    train = ClassComplexLoader("data/MRF/*","data/T1w/*","data/T2w/*", num_classes=args.num_classes)
+    test = ClassComplexLoader("data/MRF_test/*","data/T1w_test/*","data/T2w_test/*", num_classes=args.num_classes)
+
+    AMRF = AutDivMRF(batchsize=args.batchsize, epochs=args.epochs, workers=args.workers, model_name=args.model_name, device=args.device)
+    AMRF.fit(train, test)
+
+
+
